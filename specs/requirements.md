@@ -102,6 +102,23 @@ Motion & approach detection was implemented and then removed at the user's reque
 - **R13.6** Guidance SHALL run alongside object detection: a persistent guidance bar on the Live screen shows the current instruction, distance to the next maneuver, and remaining distance; spoken turn cues share the speech queue with narration (immediate turn cues interrupt).
 - **R13.7** Location permission (when-in-use) SHALL be requested with a purpose string; if denied, the Navigate screen explains and links to system Settings. Location is used only while navigating.
 
+## R14 — Instance segmentation (shape-true detection)
+
+- **R14.1** Detection SHALL use an instance-segmentation model (YOLO11n-seg) producing a per-pixel mask for each object, not just a rectangle.
+- **R14.2** The HUD SHALL render each object's mask as a tinted fill matching the object's shape (label chip and hairline box retained as the anchor/tap target).
+- **R14.3** Each detection SHALL expose its **true horizontal footprint** — the x-interval its mask actually occupies — and the safe-path advisor (R11) SHALL use that footprint instead of the bounding-box interval when marking lanes blocked, so free space between/beside irregular objects is not overstated.
+- **R14.4** Segmentation decode (score filtering, NMS, mask composition from prototype tensors) SHALL run off the main thread and cap per-frame instances (~12) to protect detection FPS.
+- **R14.5** IF the segmentation model is missing from the bundle, the pipeline SHALL fall back to the box-only detection model transparently (masks absent, footprint = bbox).
+
+## R15 — OCR text detection & reading
+
+- **R15.1** The system SHALL detect and recognize text in the camera view on-device (Vision `VNRecognizeTextRequest`, accurate level), scanning at a low cadence (~1.5 s) on its own queue so detection FPS is unaffected.
+- **R15.2** Newly appearing text SHALL be read aloud automatically, prefixed "Text:", panned to the text's position when spatial audio is on.
+- **R15.3** Recognized text SHALL be spoken **once**: a normalized form of each string is remembered for ~30 s; low-confidence strings (< 0.8) must be seen in two consecutive scans before being read (anti-flicker), high-confidence strings read immediately. At most 3 new strings are read per scan, top-to-bottom.
+- **R15.4** Text regions SHALL be outlined on the HUD with a monospace snippet chip, styled per the design system.
+- **R15.5** Automatic reading SHALL respect the narration contract: active in CONTINUOUS and NEW ONLY modes (when the "Read text aloud" setting is on and audio isn't paused); in ON DEMAND mode text is silent until "Describe scene", which appends currently visible text.
+- **R15.6** A "Read text aloud" toggle SHALL live in Settings (default ON) and persist (R6.6).
+
 ## Out of scope (v1)
 
 - Motion/approach detection (withdrawn R12 — removed per user request).

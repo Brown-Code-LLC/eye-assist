@@ -33,6 +33,22 @@ export_yolo() {
   return 1
 }
 
+# Segmentation model first (R14): no NMS pipeline — the app's
+# SegmentationDecoder handles the raw tensors.
+export_seg() {
+  local model="yolo11n-seg"
+  echo "== Exporting $model (segmentation) to Core ML =="
+  (cd "${TMPDIR:-/tmp}" && yolo export model="${model}.pt" format=coreml half=True imgsz=640) || return 1
+  local pkg="${TMPDIR:-/tmp}/${model}.mlpackage"
+  [ -d "$pkg" ] || return 1
+  rm -rf "$MODELS_DIR/YOLODetector.mlpackage" "$MODELS_DIR/YOLODetector.mlmodel"
+  cp -R "$pkg" "$MODELS_DIR/YOLODetector.mlpackage"
+  echo "$model" > "$MODELS_DIR/model_name.txt"
+  echo "== SUCCESS: $model -> $MODELS_DIR/YOLODetector.mlpackage =="
+}
+
+if export_seg; then exit 0; fi
+echo "segmentation export failed, falling back to box-only models"
 if export_yolo "yolo26n"; then exit 0; fi
 echo "yolo26n export failed, trying yolo11n"
 if export_yolo "yolo11n"; then exit 0; fi

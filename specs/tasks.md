@@ -62,3 +62,18 @@ Checklist executes `design.md`; requirement IDs from `requirements.md`. Check it
 
 ## Phase 9 — Remove motion & approach detection (2026-07-14, user request)
 - [x] 9.1 Deleted `Services/MotionTracker.swift`; removed `MotionInfo`/`Detection.motion`, AppModel annotate wiring, NarrationEngine cautions + phrase motion words, HUD APPROACHING tag (R12 withdrawn; Phase 7 items 7.2–7.5 superseded — settings icon 7.1 retained)
+
+## Phase 10 — Instance segmentation: shape-true detection (2026-07-16)
+- [x] 10.1 Exported yolo11n-seg (.mlpackage, 5.7 MB, raw tensors) replacing the box model; export script tries seg first, box models as fallback (R14.1, R14.5)
+- [x] 10.2 `Services/SegmentationDecoder.swift` — score filter, greedy NMS (cap 12), mask = coeffs·protos via cblas_sgemv (logit-thresholded), cropped SegMask with per-column occupancy (R14.4)
+- [x] 10.3 `DetectionService` picks pipeline at runtime from model output names (coordinates/confidence → Vision box path; raw tensors → seg decoder) (R14.5)
+- [x] 10.4 `Detection.footprintXInterval` (mask columns >10% occupied) — `NavigationAdvisor` lane overlap now uses true footprints instead of bbox intervals (R14.3)
+- [x] 10.5 HUD renders tinted mask fills (accent for primary, white otherwise) under hairline boxes (R14.2)
+- [x] 10.6 Verified: Python decode of exported model on bus.jpg established ground truth; the Swift decoder run on the same model + image reproduced it (4 instances, matching confidences, person footprints 13–29% tighter than bboxes)
+
+## Phase 11 — OCR text detection & reading (2026-07-16)
+- [x] 11.1 `Services/TextReaderService.swift` — Vision VNRecognizeTextRequest (.accurate, language correction) every 1.5s on its own queue; publishes TextDetection regions (R15.1)
+- [x] 11.2 `TextSpeakGate` — normalized-key dedupe (30s expiry), two-sighting rule for confidence <0.8, 3 strings/scan cap (R15.3)
+- [x] 11.3 Auto-speak "Text: …" with spatial pan, only in continuous/new-only + toggle + unpaused; on-demand gets text via Describe scene (R15.2, R15.5)
+- [x] 11.4 HUD dashed text-region outlines + snippet chips; "Read text aloud" settings toggle, default ON (R15.4, R15.6)
+- [x] 11.5 Verified: 9/9 tests — gate dedupe/expiry/anti-flicker/cap + real Vision OCR on a generated sign ("EXIT", "Main Street 24" both recognized)

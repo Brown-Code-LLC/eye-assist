@@ -5,6 +5,7 @@ import SwiftUI
 /// opacity graded by confidence. Tapping a box locks focus (R4.1).
 struct HUDOverlay: View {
     let detections: [Detection]
+    var texts: [TextDetection] = []
     let onTap: (Detection) -> Void
 
     var body: some View {
@@ -14,6 +15,11 @@ struct HUDOverlay: View {
                              rect: viewRect(for: det.bbox, in: geo.size),
                              isPrimary: index == 0,
                              onTap: onTap)
+            }
+
+            // Recognized text regions (R15.4): hairline outline + snippet chip.
+            ForEach(texts) { text in
+                TextBox(text: text, rect: viewRect(for: text.bbox, in: geo.size))
             }
 
             // Center crosshair (1a).
@@ -30,6 +36,37 @@ struct HUDOverlay: View {
     }
 }
 
+/// A recognized text region: hairline outline + monospace snippet (R15.4).
+private struct TextBox: View {
+    let text: TextDetection
+    let rect: CGRect
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Rectangle()
+                .strokeBorder(.white.opacity(0.55), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            Text(snippet)
+                .font(Theme.telemetry(9, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(.black.opacity(0.75))
+                .offset(y: 18)
+        }
+        .frame(width: max(rect.width, 24), height: max(rect.height, 12))
+        .offset(x: rect.minX, y: rect.minY)
+        .allowsHitTesting(false)
+        .accessibilityElement()
+        .accessibilityLabel("Text: \(text.text)")
+    }
+
+    private var snippet: String {
+        let s = text.text.uppercased()
+        return s.count <= 18 ? s : String(s.prefix(17)) + "…"
+    }
+}
+
 /// One bounding box with its label chip, approach tag, and footer.
 private struct DetectionBox: View {
     let detection: Detection
@@ -42,8 +79,17 @@ private struct DetectionBox: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // Shape-true mask fill (R14.2); hairline box stays as tap anchor.
+            if let maskImage = detection.mask.flatMap({ Self.maskImage($0, primary: isPrimary) }) {
+                Image(decorative: maskImage, scale: 1)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: rect.width, height: rect.height)
+                    .allowsHitTesting(false)
+            }
             Rectangle()
-                .stroke(color.opacity(opacity), lineWidth: isPrimary ? 2 : 1)
+                .stroke(color.opacity(opacity * (detection.mask == nil ? 1 : 0.5)),
+                        lineWidth: isPrimary ? 2 : 1)
             labelChip
             if isPrimary {
                 TelemetryText(text: primaryFooter, size: 9, color: Theme.accent)
@@ -96,6 +142,29 @@ private struct DetectionBox: View {
         var s = "\(detection.displayName), \(detection.position.spoken)"
         if let d = detection.distanceMeters { s += ", \(spokenDistance(d))" }
         return s
+    }
+
+    /// Tinted RGBA image from the binary mask: accent green for the primary
+    /// object, white for the rest, transparent elsewhere.
+    static func maskImage(_ mask: SegMask, primary: Bool) -> CGImage? {
+        guard mask.width > 0, mask.height > 0 else { return nil }
+        let (r, g, b): (UInt8, UInt8, UInt8) = primary ? (64, 204, 109) : (255, 255, 255)
+        let alpha: UInt8 = primary ? 96 : 60
+        var rgba = [UInt8](repeating: 0, count: mask.pixels.count * 4)
+        for (i, on) in mask.pixels.enumerated() where on == 1 {
+            rgba[i * 4] = r
+            rgba[i * 4 + 1] = g
+            rgba[i * 4 + 2] = b
+            rgba[i * 4 + 3] = alpha
+        }
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData) else { return nil }
+        return CGImage(width: mask.width, height: mask.height,
+                       bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: mask.width * 4,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                       provider: provider, decode: nil,
+                       shouldInterpolate: false, intent: .defaultIntent)
     }
 }
 

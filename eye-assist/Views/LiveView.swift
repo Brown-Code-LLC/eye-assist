@@ -16,7 +16,8 @@ struct LiveView: View {
             cameraLayer
 
             if model.focus == nil {
-                HUDOverlay(detections: model.detections) { model.lock(on: $0) }
+                HUDOverlay(detections: model.detections,
+                           texts: model.textReader.texts) { model.lock(on: $0) }
                     .ignoresSafeArea()
                 chrome
             } else {

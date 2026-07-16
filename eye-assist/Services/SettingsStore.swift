@@ -40,6 +40,9 @@ final class SettingsStore: ObservableObject {
     @Published var spatialAudio: Bool {
         didSet { d.set(spatialAudio, forKey: "spatialAudio") }
     }
+    @Published var readTextAloud: Bool {
+        didSet { d.set(readTextAloud, forKey: "readTextAloud") }
+    }
     // v2 key: v1 predates the street category and would leave it disabled forever.
     @Published var enabledCategories: Set<FilterCategory> {
         didSet { d.set(enabledCategories.map(\.rawValue), forKey: "enabledCategories.v2") }
@@ -52,6 +55,7 @@ final class SettingsStore: ObservableObject {
         voiceIdentifier = d.string(forKey: "voiceIdentifier")
         speechSpeed = d.object(forKey: "speechSpeed") as? Double ?? 0.6
         spatialAudio = d.object(forKey: "spatialAudio") as? Bool ?? true
+        readTextAloud = d.object(forKey: "readTextAloud") as? Bool ?? true
         if let raw = d.stringArray(forKey: "enabledCategories.v2") {
             enabledCategories = Set(raw.compactMap(FilterCategory.init(rawValue:)))
         } else {

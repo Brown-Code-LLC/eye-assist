@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     let voiceQuery = VoiceQueryService()
     let advisor = NavigationAdvisor()
     let router = RouteNavigator()
+    let textReader = TextReaderService()
 
     // MARK: Published state
     @Published private(set) var detections: [Detection] = []
@@ -52,6 +53,7 @@ final class AppModel: ObservableObject {
 
         camera.onFrame = { [weak self] pixelBuffer, depth in
             self?.detector.process(pixelBuffer: pixelBuffer, depth: depth)
+            self?.textReader.process(pixelBuffer: pixelBuffer) // own cadence (R15.1)
         }
         detector.onDetections = { [weak self] detections, fps in
             Task { @MainActor in
@@ -62,6 +64,18 @@ final class AppModel: ObservableObject {
         router.speak = { [weak self] sentence, interrupt in
             self?.speech.speak(sentence, interrupt: interrupt)
         }
+        // New text cleared the speak-once gate (R15.2).
+        textReader.onNewText = { [weak self] text, pan in
+            Task { @MainActor in
+                guard let self, self.focus == nil else { return }
+                self.speech.speak("Text: \(text)", pan: pan, spatial: self.settings.spatialAudio)
+            }
+        }
+        // Views observe AppModel; forward the text reader's region updates.
+        textReader.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     // MARK: Lifecycle
@@ -98,6 +112,10 @@ final class AppModel: ObservableObject {
         self.fps = fps
 
         pathSuggestion = advisor.update(filtered)
+        // Automatic text reading only in continuous/new-only, toggle on,
+        // audio unpaused (R15.5); scanning itself continues for on-demand.
+        textReader.autoSpeak = settings.readTextAloud
+            && settings.mode != .onDemand && !audioPaused
 
         if focus != nil {
             trackFocusedObject(in: filtered)
@@ -174,6 +192,10 @@ final class AppModel: ObservableObject {
 
     func describeScene() {
         narration.describeScene(detections)
+        // On-demand users get visible text with their description (R15.5).
+        if settings.readTextAloud, let textSummary = textReader.visibleTextSummary {
+            speech.speak(textSummary)
+        }
     }
 
     func repeatLast() {

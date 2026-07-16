@@ -11,7 +11,8 @@ spec-driven development — see [specs/requirements.md](specs/requirements.md),
 
 ## Features
 
-- **Live HUD** — bounding boxes + confidence labels, model/FPS telemetry, crosshair,
+- **Live HUD** — shape-true instance masks (YOLO11n-seg) tinted over each object,
+  with hairline boxes + confidence labels, model/FPS telemetry, crosshair,
   spatial-pan indicator, narration bar with waveform.
 - **Three narration modes** (Settings): **Continuous** scene summaries ·
   **New only** (announce objects as they appear) · **On demand** ("Describe scene"
@@ -29,11 +30,20 @@ spec-driven development — see [specs/requirements.md](specs/requirements.md),
 - **Safe-path navigation** — the frame is split into left/center/right lanes; nearby
   obstacles produce one stabilized suggestion (CLEAR · MOVE LEFT · MOVE RIGHT ·
   STRAIGHT WITH CAUTION · STOP) shown as a banner and spoken when it changes.
+  Lane occupancy uses each object's **segmentation-mask footprint** (its true
+  horizontal extent), not the bounding rectangle, so free space beside irregular
+  shapes isn't overstated.
   STOP interrupts speech immediately; announcements of near obstacles carry the
   avoidance hint ("Chair ahead, one meter — move left to avoid").
 - **Street-ready** — a "Street & signals" filter group (traffic light, stop sign,
   fire hydrant, parking meter, bench) is on by default, and safety-critical street
   objects (signals, vehicles, people) take announcement priority.
+- **Text reading (OCR)** — on-device Vision text recognition scans the view every
+  ~1.5 s and reads new text aloud automatically ("Text: EXIT"), panned to where
+  the text is. Each string is spoken once (30 s memory), low-confidence reads
+  need two sightings so flicker never speaks, and text regions show on the HUD
+  with dashed outlines. Toggle in Settings; in on-demand mode text arrives with
+  "Describe scene" instead of automatically.
 - **Always-reachable settings** — a persistent gear icon sits top-right of the Live
   screen in every mode.
 - **GPS walking navigation** — search a destination (navigate icon, top-right),

@@ -99,11 +99,14 @@ final class NavigationAdvisor {
         guard !obstacles.isEmpty else { return .clear }
 
         // Lane blocked when an obstacle overlaps ≥20% of its width (R11.1).
+        // The obstacle's extent is its mask-true footprint, not the bbox, so
+        // free space beside irregular shapes isn't overstated (R14.3).
         var laneObstacles: [[Detection]] = [[], [], []]
         for obstacle in obstacles {
-            let box = obstacle.bbox
+            let footprint = obstacle.footprintXInterval
             for (i, lane) in laneRanges.enumerated() {
-                let overlap = min(box.maxX, lane.upperBound) - max(box.minX, lane.lowerBound)
+                let overlap = min(footprint.upperBound, lane.upperBound)
+                    - max(footprint.lowerBound, lane.lowerBound)
                 if overlap >= (lane.upperBound - lane.lowerBound) * minOverlapFraction {
                     laneObstacles[i].append(obstacle)
                 }

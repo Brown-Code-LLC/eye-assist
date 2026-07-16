@@ -9,6 +9,11 @@ import AVFoundation
 final class DetectionService {
     static let confidenceThreshold: Float = 0.5
 
+    /// Chosen at load time from the model's outputs (R14.5): a `coordinates`/
+    /// `confidence` pair means an embedded-NMS box model Vision can decode;
+    /// raw tensors mean YOLO-seg, decoded by SegmentationDecoder.
+    private enum Pipeline { case boxObjects, segmentation }
+    private var pipeline: Pipeline = .boxObjects
     private var visionModel: VNCoreMLModel?
     private let inferenceQueue = DispatchQueue(label: "audiovision.inference")
     private var busy = false
@@ -40,6 +45,9 @@ final class DetectionService {
             let config = MLModelConfiguration()
             config.computeUnits = .all
             let mlModel = try MLModel(contentsOf: url, configuration: config)
+            let outputs = Set(mlModel.modelDescription.outputDescriptionsByName.keys)
+            pipeline = outputs.contains("confidence") && outputs.contains("coordinates")
+                ? .boxObjects : .segmentation
             visionModel = try VNCoreMLModel(for: mlModel)
         } catch {
             print("DetectionService: model load failed – \(error)")
@@ -70,20 +78,30 @@ final class DetectionService {
             return
         }
 
-        let observations = (request.results as? [VNRecognizedObjectObservation]) ?? []
-        let detections: [Detection] = observations.compactMap { obs in
-            guard let top = obs.labels.first,
-                  top.confidence >= Self.confidenceThreshold else { return nil }
-            return Detection(
-                label: top.identifier,
-                confidence: top.confidence,
-                bbox: obs.boundingBox,
-                position: PositionBucket(normalizedMidX: obs.boundingBox.midX),
-                distanceMeters: DistanceEstimator.estimate(
-                    bbox: obs.boundingBox, label: top.identifier, depth: depth)
-            )
+        let detections: [Detection]
+        switch pipeline {
+        case .boxObjects:
+            let observations = (request.results as? [VNRecognizedObjectObservation]) ?? []
+            detections = observations.compactMap { obs in
+                guard let top = obs.labels.first,
+                      top.confidence >= Self.confidenceThreshold else { return nil }
+                return Detection(
+                    label: top.identifier,
+                    confidence: top.confidence,
+                    bbox: obs.boundingBox,
+                    position: PositionBucket(normalizedMidX: obs.boundingBox.midX),
+                    distanceMeters: DistanceEstimator.estimate(
+                        bbox: obs.boundingBox, label: top.identifier, depth: depth)
+                )
+            }
+            .sorted { $0.confidence > $1.confidence }
+
+        case .segmentation:
+            let arrays = (request.results as? [VNCoreMLFeatureValueObservation])?
+                .compactMap { $0.featureValue.multiArrayValue } ?? []
+            detections = SegmentationDecoder.decode(outputs: arrays, depth: depth)
+                .sorted { $0.confidence > $1.confidence }
         }
-        .sorted { $0.confidence > $1.confidence }
 
         // Rolling 2s window FPS (R1.3).
         let now = CACurrentMediaTime()

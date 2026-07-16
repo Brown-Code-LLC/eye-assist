@@ -89,6 +89,16 @@ enum FilterCategory: String, Codable, CaseIterable {
     }
 }
 
+/// Binary instance mask cropped to a detection's bbox (R14): row-major grid
+/// in proto resolution, row 0 = top of the box.
+struct SegMask: Equatable {
+    let width: Int
+    let height: Int
+    let pixels: [UInt8]
+    /// Fraction of set pixels per column (0…1); length == width.
+    let columnOccupancy: [Float]
+}
+
 /// One detected object in the current frame (design.md §2).
 struct Detection: Identifiable, Equatable {
     let id = UUID()
@@ -98,6 +108,24 @@ struct Detection: Identifiable, Equatable {
     let bbox: CGRect
     let position: PositionBucket
     let distanceMeters: Double?
+    /// Instance mask when the segmentation model is active (R14); nil on the
+    /// box-only fallback pipeline.
+    var mask: SegMask?
+
+    /// True horizontal extent (normalized x) from mask columns >10% occupied;
+    /// falls back to the bbox interval without a mask (R14.3).
+    var footprintXInterval: ClosedRange<CGFloat> {
+        guard let mask, mask.width > 0 else { return bbox.minX...bbox.maxX }
+        var first = -1, last = -1
+        for (i, f) in mask.columnOccupancy.enumerated() where f > 0.1 {
+            if first < 0 { first = i }
+            last = i
+        }
+        guard first >= 0 else { return bbox.minX...bbox.maxX }
+        let lo = bbox.minX + CGFloat(first) / CGFloat(mask.width) * bbox.width
+        let hi = bbox.minX + CGFloat(last + 1) / CGFloat(mask.width) * bbox.width
+        return lo...min(hi, bbox.maxX)
+    }
 
     var category: FilterCategory { FilterCategory.category(for: label) }
     var displayName: String { label.capitalized }

@@ -101,6 +101,26 @@ struct SettingsView: View {
                     .avCard()
                 }
 
+                section("TEXT READING") {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Read text aloud")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.white)
+                            Text("signs, labels, doors, documents")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                        Spacer()
+                        Toggle("", isOn: $settings.readTextAloud)
+                            .labelsHidden()
+                            .tint(Theme.accent)
+                            .accessibilityLabel("Read text aloud")
+                    }
+                    .padding(EdgeInsets(top: 15, leading: 16, bottom: 15, trailing: 16))
+                    .avCard()
+                }
+
                 section("SPATIAL AUDIO") {
                     HStack {
                         Text("Pan by object position")
