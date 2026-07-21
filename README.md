@@ -1,4 +1,4 @@
-# AudioVision (eye-assist)
+# AudioVision (eye-assist) Navigation System
 
 Live camera object detection that **speaks what it sees** — built eyes-free-first for
 blind and low-vision users. A YOLO11n Core ML model runs on-device over the camera
